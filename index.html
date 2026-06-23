@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Конструктор стеллажа · Anna Flaum</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{--bg:#15110d;--panel:#211b14;--line:#352c21;--wood:#c9a063;--wood-soft:#e8d4b0;--ink:#f2ece2;--ink-dim:#a89b88;--accent:#d4663a;--track:#352c21;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--ink);display:flex;overflow:hidden}
+  #stage{flex:1;position:relative;min-width:0;display:flex;flex-direction:column}
+  #canvasWrap{flex:1;position:relative;min-height:0}
+  #scene,#scene2d{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #scene{cursor:grab}#scene:active{cursor:grabbing}
+  #scene2d{display:none;background:#15110d}
+  .readout{position:absolute;top:14px;left:14px;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--ink-dim);background:rgba(21,17,13,.74);backdrop-filter:blur(8px);border:1px solid var(--line);padding:8px 12px;border-radius:7px;line-height:1.65;z-index:5}
+  .readout .big{font-size:17px;color:var(--ink)}.readout b{color:var(--wood);font-weight:600}
+  .viewtoggle{position:absolute;top:14px;right:14px;z-index:6;display:flex;gap:5px;background:rgba(21,17,13,.74);backdrop-filter:blur(8px);border:1px solid var(--line);padding:4px;border-radius:8px}
+  .viewtoggle button{padding:6px 13px;font-size:12px;cursor:pointer;background:transparent;color:var(--ink-dim);border:none;border-radius:6px;font-family:inherit}
+  .viewtoggle button.on{background:var(--wood);color:#2a2014;font-weight:600}
+  .hint{position:absolute;bottom:10px;left:14px;font-size:11px;color:var(--ink-dim);opacity:.7;z-index:5}
+  #counter{flex-shrink:0;background:#1b1610;border-top:1px solid var(--line);padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  #counter .ttl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+  #counter .chip{display:flex;align-items:baseline;gap:6px;font-variant-numeric:tabular-nums}
+  #counter .chip i{width:9px;height:9px;border-radius:2px;display:inline-block}
+  #counter .chip .lbl{font-size:11.5px;color:var(--ink-dim)}
+  #counter .chip .num{font-size:16px;font-weight:600;color:var(--ink)}
+  #panel{width:360px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--line);padding:22px 20px;overflow-y:auto;height:100vh}
+  .brand{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+  h1{font-size:20px;font-weight:600;margin-bottom:6px}
+  .sub{font-size:11.5px;color:var(--ink-dim);margin-bottom:14px;line-height:1.5}
+  .resetbtn{width:100%;padding:11px;font-size:12.5px;font-family:inherit;cursor:pointer;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:8px;margin-bottom:20px}
+  .resetbtn:hover{background:var(--accent);color:#15110d;font-weight:600}
+  .group{margin-bottom:20px}
+  .gt{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .ctrl{margin-bottom:13px}
+  .ch{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .ch label{font-size:12.5px}.ch .val{font-size:12.5px;color:var(--wood);font-variant-numeric:tabular-nums}
+  input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--track);border-radius:2px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--wood);cursor:pointer;border:3px solid var(--panel);box-shadow:0 0 0 1px var(--wood)}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--wood);cursor:pointer;border:3px solid var(--panel)}
+  select.glob{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:7px;font-size:12px;font-family:inherit;cursor:pointer}
+  .toggle{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+  .toggle span{font-size:12.5px}
+  .sw{position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0}
+  .sw input{opacity:0;width:0;height:0}
+  .sw .slot{position:absolute;inset:0;background:var(--track);border-radius:22px;transition:.2s}
+  .sw .slot:before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:var(--ink-dim);border-radius:50%;transition:.2s}
+  .sw input:checked + .slot{background:var(--wood)}.sw input:checked + .slot:before{transform:translateX(18px);background:#2a2014}
+  .fit{font-size:11.5px;padding:7px 10px;border-radius:6px;margin-bottom:10px;font-variant-numeric:tabular-nums}
+  .fit.ok{background:rgba(120,160,90,.15);color:#a8c98a;border:1px solid rgba(120,160,90,.3)}
+  .fit.over{background:rgba(200,90,70,.15);color:#e09a86;border:1px solid rgba(200,90,70,.35)}
+  .fixed-dims{font-size:12px;line-height:2;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+  .fixed-dims .row{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);padding:2px 0}
+  .fixed-dims .row b{color:var(--wood-soft);font-weight:500}
+  .fixed-dims .lock{font-size:10px;opacity:.6;margin-top:6px;display:block}
+  .secCard{border:1px solid var(--line);border-radius:8px;padding:9px;margin-bottom:8px;background:var(--bg)}
+  .secCard .top{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .secCard .top .n{font-size:11px;color:var(--ink-dim);width:16px;font-variant-numeric:tabular-nums}
+  .secCard select{flex:1;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 6px;font-size:11.5px;font-family:inherit;cursor:pointer}
+  .secCard .del{background:transparent;border:1px solid var(--line);color:var(--ink-dim);border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:13px}
+  .secCard .del:hover{border-color:var(--accent);color:var(--accent)}
+  .secCard .cap{font-size:10.5px;color:var(--wood);margin-top:7px;font-variant-numeric:tabular-nums;line-height:1.5}
+  .secCard .warn{font-size:10px;color:#e0a86b;margin-top:5px;line-height:1.4}
+  .secCard .auto{font-size:11px;color:var(--ink-dim);margin-top:4px;font-style:italic}
+  .wpills{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+  .wpills button{flex:1;min-width:44px;padding:5px 0;font-size:10.5px;cursor:pointer;background:transparent;color:var(--ink-dim);border:1px solid var(--line);border-radius:5px;font-family:inherit;font-variant-numeric:tabular-nums}
+  .wpills button.on{background:var(--wood);color:#2a2014;border-color:var(--wood);font-weight:600}
+  .subctl{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--ink-dim);flex-wrap:wrap}
+  .subctl .mini{display:flex;gap:3px;flex-wrap:wrap}
+  .subctl .mini button{padding:3px 7px;font-size:10px;cursor:pointer;background:transparent;color:var(--ink-dim);border:1px solid var(--line);border-radius:4px;font-family:inherit}
+  .subctl .mini button.on{background:var(--wood);color:#2a2014;border-color:var(--wood);font-weight:600}
+  .subctl label.tg{display:flex;align-items:center;gap:5px;cursor:pointer}
+  .addbtn{width:100%;padding:8px;font-size:11.5px;font-family:inherit;cursor:pointer;background:transparent;color:var(--ink-dim);border:1px dashed var(--line);border-radius:7px}
+  .addbtn:hover{border-color:var(--wood);color:var(--wood)}
+  .summary{margin-top:6px;padding:13px;background:var(--bg);border:1px solid var(--line);border-radius:8px;font-size:11.5px;line-height:1.85;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+  .summary .row{display:flex;justify-content:space-between}.summary .row b{color:var(--wood-soft);font-weight:500}
+  .note{font-size:11px;color:var(--ink-dim);opacity:.7;margin-top:10px;line-height:1.55}
+  @media (max-width:760px){body{flex-direction:column}#stage{height:54vh;flex:none}#panel{width:100%;height:auto;flex:1;border-left:none;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="canvasWrap">
+      <canvas id="scene"></canvas>
+      <canvas id="scene2d"></canvas>
+      <div class="readout" id="readout"></div>
+      <div class="viewtoggle"><button id="v3d" class="on">3D</button><button id="v2d">2D · размеры</button></div>
+      <div class="hint" id="hint">Тяните — повернуть · колесо — зум</div>
+    </div>
+    <div id="counter"></div>
+  </div>
+  <div id="panel">
+    <div class="brand">Anna Flaum · стеллаж шоурума</div>
+    <h1>Конструктор стеллажа</h1>
+    <div class="sub">Ширины привязаны к продукту. Халаты — по остатку стены. Под графиком — счётчик ёмкости.</div>
+    <button class="resetbtn" id="reset">↺ Сбросить к согласованному стандарту</button>
+
+    <div class="group">
+      <div class="gt">1 · Общие габариты — дано, не меняем</div>
+      <div class="fixed-dims" id="fixedDims"></div>
+    </div>
+
+    <div class="group">
+      <div class="gt">2 · Левый блок (за колонной)</div>
+      <div class="fit" id="fitL"></div>
+      <div id="secL"></div>
+      <button class="addbtn" id="addL">+ добавить секцию</button>
+    </div>
+
+    <div class="group">
+      <div class="gt">3 · Правый блок (основной)</div>
+      <div class="fit" id="fitR"></div>
+      <div id="secR"></div>
+      <button class="addbtn" id="addR">+ добавить секцию</button>
+      <div class="note">Все секции фиксированной ширины, кроме «Халаты» — они забирают остаток стены автоматически. Подушки/универсал максимум 900 (шире — усиление полки).</div>
+    </div>
+
+    <div class="group">
+      <div class="gt">4 · Ниша под короба (низ всех секций)</div>
+      <div class="ctrl"><label class="ch"><span>Под какой короб</span></label>
+        <select class="glob" id="boxSize">
+          <option value="220">Низкий — короб 18 см (ниша 22)</option>
+          <option value="290">Средний — короб 25 см (ниша 29)</option>
+          <option value="340" selected>Куб — короб 30 см (ниша 34)</option>
+          <option value="370">Высокий — короб 33 см (ниша 37)</option>
+        </select></div>
+      <div class="toggle"><span>Ниша под короба включена</span><label class="sw"><input type="checkbox" id="basket" checked><span class="slot"></span></label></div>
+    </div>
+
+    <div class="group">
+      <div class="gt">5 · Ниша под кондиционер — корректирую я</div>
+      <div class="note" id="acState"></div>
+      <div class="ctrl" style="margin-top:8px"><div class="ch"><label>Ширина ниши</label><span class="val" id="vAcW">800</span></div><input type="range" id="AcW" min="400" max="1400" step="20" value="800"></div>
+      <div class="ctrl"><div class="ch"><label>Высота ниши (под коробами)</label><span class="val" id="vAcH">1600</span></div><input type="range" id="AcH" min="600" max="2050" step="20" value="1600"></div>
+    </div>
+
+    <div class="group">
+      <div class="gt">6 · Корпус и оформление</div>
+      <div class="ctrl"><div class="ch"><label>Толщина материала</label><span class="val" id="vT">18</span></div><input type="range" id="T" min="16" max="32" step="2" value="18"></div>
+      <div class="toggle"><span>Передняя штанга-ограничитель</span><label class="sw"><input type="checkbox" id="frontbar" checked><span class="slot"></span></label></div>
+      <div class="toggle"><span>Подсветка по полкам (LED)</span><label class="sw"><input type="checkbox" id="led" checked><span class="slot"></span></label></div>
+      <div class="toggle"><span>Задняя стенка (полки)</span><label class="sw"><input type="checkbox" id="back" checked><span class="slot"></span></label></div>
+      <div class="toggle"><span>Цоколь 80 мм</span><label class="sw"><input type="checkbox" id="plinth" checked><span class="slot"></span></label></div>
+      <div class="note">Перекладины одеял/халатов — в ~6,5 см от верха (рост 170 дотянется). Верхних антресолей нет. Полки переставные (присадка 32 мм).</div>
+    </div>
+
+    <div class="group">
+      <div class="gt">Сводка</div>
+      <div class="summary" id="summary"></div>
+      <div class="note">Эскиз компоновки. Когда устроит — соберём рабочий чертёж с разрезами, узлами, пометками про усиления и спецификацией.</div>
+    </div>
+  </div>
+
+<script>
+// ===== reference product sizes (зашиты) =====
+const PILLOW_LAY=150;     // подушка лёжа: ~15 см на штуку в стопке
+const PILLOW_TOL=40;      // допуск сжатия/свеса
+const DUVET={s15:{slot:750,drop:1000,name:'полуторное'}, s20:{slot:1000,drop:1100,name:'двуспальное'}};
+const DUVET_TOL=40;
+const BOX_W=300, BOX_GAP=30;   // короб 30 + зазор 30
+const ROBE_SLOT=130, ROBE_DROP=1400, TOWEL_HANG=110, TOP_GAP=65, TOPSHELF_RES=560;
+const SLIPPER_SLOT=170, SLIPPER_TIER=150; // пара тапочек: ~17 см ширина, ~15 см ярус
+const SHELF_MAX=900;      // предел полки без усиления
+
+const TYPE={
+  pillows:  {name:'Подушки (лёжа)',  col:0xd8b87e, col2:'#d8b87e', widths:[700,900], dist:[460,540,610,680]},
+  universal:{name:'Универсал',       col:0xc2a878, col2:'#c2a878', widths:[700,900], dist:[360,460,540]},
+  duvet:    {name:'Одеяла',          col:0x8fa9bc, col2:'#8fa9bc', widths:[750,1000,1500]},
+  towels:   {name:'Полотенца',       col:0x86b0a8, col2:'#86b0a8', widths:[600,900]},
+  robes:    {name:'Халаты (остаток)',col:0x9aa3ad, col2:'#9aa3ad', widths:[]},
+  acbay:    {name:'Ниша (кондиц.)',  col:0x5b5048, col2:'#5b5048', widths:[]},
+};
+
+const STANDARD={
+  leftSpan:1170, col:460, rightSpan:5700, H:2290, D:400, T:18,
+  basket:true, basketH:340, frontbar:true, led:true, back:true, plinth:true,
+  acW:800, acH:1600,
+  left:[ {w:1100,type:'duvet',rails:2,topShelf:false} ],
+  right:[
+    {w:1500,type:'duvet',rails:2,topShelf:false},
+    {w:900,type:'pillows',dist:540},
+    {w:900,type:'pillows',dist:540},
+    {w:700,type:'universal',dist:460},
+    {w:0,type:'robes'},
+    {w:800,type:'acbay'}
+  ]
+};
+let cfg=JSON.parse(JSON.stringify(STANDARD));
+let view2d=false;
+
+// ===== helpers =====
+function across(usableW,itemW,gap,tol){return Math.floor((usableW+(tol||0))/(itemW+(gap||0)));}
+function secDist(sec){return sec.dist||(sec.type==='universal'?460:540);}
+function secRails(sec){return sec.rails||1;}
+function pillowTiers(zB,zT,dist){return Math.max(1,Math.round((zT-zB)/dist));}
+function duvetZone(sec,zB,zT){
+  const railTop=zT-TOP_GAP-(sec.topShelf?TOPSHELF_RES:0), R=secRails(sec), zoneH=railTop-zB, spacing=zoneH/R;
+  const ys=[]; for(let i=0;i<R;i++)ys.push(railTop-i*spacing);
+  return {railTop,R,zoneH,spacing,ys};
+}
+// халаты по остатку
+function applyAuto(){
+  ['left','right'].forEach(side=>{
+    const span=side==='left'?cfg.leftSpan:cfg.rightSpan;
+    let fixed=0,robeN=0;
+    cfg[side].forEach(s=>{ if(s.type==='acbay')s.w=cfg.acW; if(s.type==='robes')robeN++; else fixed+=s.w; });
+    const avail=span - fixed - cfg.T; // торцевая панель
+    cfg[side].forEach(s=>{ if(s.type==='robes') s.w=robeN>0?Math.max(0,Math.round(avail/robeN)):0; });
+  });
+}
+
+// ===== three =====
+const canvas=document.getElementById('scene');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x15110d);
+const camera=new THREE.PerspectiveCamera(40,1,1,300000);
+scene.add(new THREE.HemisphereLight(0xffffff,0x2a241c,0.85));
+const klight=new THREE.DirectionalLight(0xfff2dd,0.9);klight.position.set(1.0,1.5,1.2);scene.add(klight);
+const flight=new THREE.DirectionalLight(0xbcd0ff,0.28);flight.position.set(-1,0.4,-0.5);scene.add(flight);
+const M={
+  body:new THREE.MeshStandardMaterial({color:0xc9a063,roughness:0.72,metalness:0.04}),
+  inner:new THREE.MeshStandardMaterial({color:0xb08a52,roughness:0.8}),
+  back:new THREE.MeshStandardMaterial({color:0x8a6a40,roughness:0.9}),
+  shelf:new THREE.MeshStandardMaterial({color:0xd8b87e,roughness:0.6}),
+  rail:new THREE.MeshStandardMaterial({color:0x9aa3ad,roughness:0.35,metalness:0.7}),
+  pillow:new THREE.MeshStandardMaterial({color:0xf4efe6,roughness:0.95}),
+  pillowEdge:new THREE.MeshStandardMaterial({color:0xcdbfa6,roughness:0.9,wireframe:true}),
+  robe:new THREE.MeshStandardMaterial({color:0xe8ddc8,roughness:0.95}),
+  duvet:new THREE.MeshStandardMaterial({color:0xf0ece3,roughness:0.95}),
+  towel:new THREE.MeshStandardMaterial({color:0xdfe6e2,roughness:0.9}),
+  jar:new THREE.MeshStandardMaterial({color:0xcfe0e6,roughness:0.1,metalness:0.0,transparent:true,opacity:0.4}),
+  down:new THREE.MeshStandardMaterial({color:0xfbf7ee,roughness:1.0}),
+  slipper:new THREE.MeshStandardMaterial({color:0xe6d8c4,roughness:0.85}),
+  basket:new THREE.MeshStandardMaterial({color:0x7a6346,roughness:0.85}),
+  col:new THREE.MeshStandardMaterial({color:0x453c34,roughness:0.92}),
+  ac:new THREE.MeshStandardMaterial({color:0xeeeeee,roughness:0.6}),
+  led:new THREE.MeshStandardMaterial({color:0xffe9b0,emissive:0xffcf6e,emissiveIntensity:0.6,roughness:0.4}),
+};
+const matEdge=new THREE.LineBasicMaterial({color:0x5e4b30});
+let group=new THREE.Group();scene.add(group);
+function box(w,h,d,mat,x,y,z,edges=true){const m=new THREE.Mesh(new THREE.BoxGeometry(Math.abs(w)||1,Math.abs(h)||1,Math.abs(d)||1),mat);m.position.set(x,y,z);group.add(m);if(edges){const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),matEdge);e.position.set(x,y,z);group.add(e);}return m;}
+function cyl(r,len,mat,x,y,z){const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,16),mat);m.rotation.z=Math.PI/2;m.position.set(x,y,z);group.add(m);return m;}
+
+// ===== capacity =====
+function sectionCapacity(sec,zB,zT){
+  const usableW=sec.w-cfg.T;
+  const r={pillows:0,duv15:0,duv20:0,robes:0,towels:0,boxes:0,slippers:0,slipShelves:0,visible:null,wide:false};
+  if((sec.type==='pillows'||sec.type==='universal')&&sec.w>SHELF_MAX) r.wide=true;
+  if(sec.type==='pillows'){
+    const tiers=pillowTiers(zB,zT,secDist(sec)), rs=(zT-zB)/tiers;
+    const stack=Math.max(1,Math.floor(rs/PILLOW_LAY));
+    r.pillows=tiers*stack; // 1 колонка
+  } else if(sec.type==='duvet'){
+    const z=duvetZone(sec,zB,zT);
+    r.duv15=Math.max(0,across(usableW,DUVET.s15.slot,0,DUVET_TOL))*z.R;
+    r.duv20=Math.max(0,across(usableW,DUVET.s20.slot,0,DUVET_TOL))*z.R;
+    r.visible={v15:Math.round(Math.min(z.spacing,DUVET.s15.drop)/10),v20:Math.round(Math.min(z.spacing,DUVET.s20.drop)/10)};
+    if(sec.topShelf)r.pillows=1;
+  } else if(sec.type==='robes'){
+    r.robes=Math.max(0,across(usableW,ROBE_SLOT,0,0));
+    // зона тапочек под халатами
+    const ry=zT-TOP_GAP, robeBottom=ry-ROBE_DROP, slipTop=Math.max(zB,robeBottom-40);
+    if(slipTop-zB>120){
+      r.slipShelves=Math.max(1,Math.floor((slipTop-zB)/SLIPPER_TIER));
+      const pairs=Math.max(1,Math.floor(usableW/SLIPPER_SLOT));
+      r.slippers=r.slipShelves*pairs;
+    }
+  } else if(sec.type==='towels'){
+    const tiers=Math.max(2,Math.min(3,Math.floor((zT-zB)/520)));
+    r.towels=Math.max(1,across(usableW,TOWEL_HANG,0,0))*tiers;
+  } else if(sec.type==='universal'){
+    const shelves=Math.max(1,Math.round((zT-zB)/secDist(sec)));
+    r.boxes=Math.max(1,across(usableW,BOX_W,BOX_GAP,BOX_GAP))*shelves;
+  }
+  return r;
+}
+
+// ===== 3D contents =====
+function drawPillowStacks(cx,usableW,zB,zT,D,dist){
+  const T=cfg.T, tiers=pillowTiers(zB,zT,dist), rs=(zT-zB)/tiers;
+  for(let k=1;k<tiers;k++){const sy=zB+rs*k;box(usableW,T,D-20,M.shelf,cx,sy,-10);if(cfg.led)box(usableW-20,6,8,M.led,cx,sy+5,D/2-14,false);}
+  const stack=Math.max(1,Math.floor(rs/PILLOW_LAY));
+  for(let k=0;k<tiers;k++){
+    const floor=zB+rs*k;
+    for(let s=0;s<stack;s++){
+      const py=floor+T/2+PILLOW_LAY*(s+0.5);
+      box(usableW-44,PILLOW_LAY-24,D-66,M.pillow,cx,py,-12,true); // edges=true → видны границы каждой подушки
+    }
+    if(cfg.frontbar)cyl(7,usableW-14,M.rail,cx,floor+T/2+18,D/2-46);
+  }
+}
+function drawSection(sec,cx,usableW,zB,zT,D){
+  const span=zT-zB; if(span<60)return; const T=cfg.T;
+  if(sec.type==='pillows'){drawPillowStacks(cx,usableW,zB,zT,D,secDist(sec));}
+  else if(sec.type==='universal'){
+    const shelves=Math.max(1,Math.round(span/secDist(sec)));
+    const rs=span/shelves;
+    for(let k=1;k<shelves;k++){const sy=zB+rs*k;box(usableW,T,D-20,M.shelf,cx,sy,-10);if(cfg.led)box(usableW-20,6,8,M.led,cx,sy+5,D/2-14,false);}
+    for(let k=0;k<shelves;k++){
+      const floor=zB+rs*k;
+      if(k%2===0){
+        // полотенца стопками (2-3 стопки)
+        const cols=Math.max(2,Math.floor(usableW/240));
+        for(let c=0;c<cols;c++){const px=cx-usableW/2+(usableW/cols)*(c+0.5);
+          const n=Math.max(2,Math.floor((rs-60)/55));
+          for(let t=0;t<n;t++){box((usableW/cols)-30,46,D-90,M.towel,px,floor+T/2+30+t*52,-16,false);}
+        }
+      } else {
+        // колбы со стеклом + пух внутри
+        const cols=Math.max(2,Math.floor(usableW/200));
+        for(let c=0;c<cols;c++){const px=cx-usableW/2+(usableW/cols)*(c+0.5);
+          const jh=Math.min(rs-50,220), r=Math.min((usableW/cols)*0.32,75);
+          const jar=new THREE.Mesh(new THREE.CylinderGeometry(r,r,jh,18),M.jar);jar.position.set(px,floor+T/2+jh/2+8,-10);group.add(jar);
+          const dn=new THREE.Mesh(new THREE.SphereGeometry(r*0.78,12,12),M.down);dn.position.set(px,floor+T/2+jh*0.42+8,-10);group.add(dn);
+        }
+      }
+    }
+  }
+  else if(sec.type==='duvet'){
+    const z=duvetZone(sec,zB,zT);
+    if(sec.topShelf){box(usableW,T,D-20,M.shelf,cx,z.railTop+40,-10);const cols=Math.max(1,across(usableW,700,0,PILLOW_TOL));for(let c=0;c<cols;c++){const px=cx-usableW/2+(usableW/cols)*(c+0.5);box((usableW/cols)-20,PILLOW_LAY-10,D-70,M.pillow,px,z.railTop+40+T/2+PILLOW_LAY*0.5,-14,false);}}
+    const per=Math.max(1,across(usableW,DUVET.s15.slot,0,DUVET_TOL));
+    for(let i=0;i<z.R;i++){const ry=z.ys[i];cyl(9,usableW-12,M.rail,cx,ry,0);const drop=Math.min(DUVET.s15.drop,z.spacing-40,ry-zB-20);for(let h=0;h<per;h++){const hx=cx-usableW/2+(usableW/per)*(h+0.5);box(DUVET.s15.slot*0.72,drop,70,M.duvet,hx,ry-drop/2-4,0,false);}}
+  }
+  else if(sec.type==='robes'){
+    if(usableW<60)return;
+    const ry=zT-TOP_GAP;cyl(9,usableW-12,M.rail,cx,ry,0);
+    const robeBottom=ry-ROBE_DROP; // низ халата
+    const rc=Math.max(1,across(usableW,ROBE_SLOT,0,0)),drop=Math.min(ROBE_DROP,(ry-zB)-40);
+    for(let h=0;h<rc;h++){const hx=cx-usableW/2+ROBE_SLOT*(h+0.5);const rb=box(54,drop,40,M.robe,hx,ry-drop/2-6,0,false);rb.rotation.y=0.5;}
+    // полки тапочек в свободной зоне под халатами
+    const slipTop=Math.max(zB, robeBottom-40);
+    if(slipTop-zB>120){
+      const sShelves=Math.max(1,Math.floor((slipTop-zB)/SLIPPER_TIER));
+      const srs=(slipTop-zB)/sShelves;
+      for(let k=0;k<sShelves;k++){const floor=zB+srs*k;if(k>0)box(usableW,T,D-20,M.shelf,cx,floor,-10);
+        const pairs=Math.max(1,Math.floor(usableW/SLIPPER_SLOT));
+        for(let p=0;p<pairs;p++){const px=cx-usableW/2+(usableW/pairs)*(p+0.5);box((usableW/pairs)-28,60,D-120,M.slipper,px,floor+T/2+35,-30,false);}
+      }
+    }
+  }
+  else if(sec.type==='towels'){
+    const tiers=Math.max(2,Math.min(3,Math.floor(span/520)));
+    for(let t=0;t<tiers;t++){const ry=zT-TOP_GAP-t*(span-TOP_GAP)/tiers;if(ry<zB+40)break;cyl(7,usableW-14,M.rail,cx,ry,0);const tc=Math.max(2,Math.floor(usableW/120)),drop=Math.min(680,(span-TOP_GAP)/tiers-30);for(let h=0;h<tc;h++){const hx=cx-usableW/2+22+h*(usableW-44)/(tc-1||1);box(40,drop,16,M.towel,hx,ry-drop/2-4,0,false);}}
+  }
+}
+function buildBlock(sections,startX){
+  const {H,D,T}=cfg; const plinthH=cfg.plinth?80:0, bodyH=H-plinthH;
+  const blockW=sections.reduce((a,s)=>a+s.w,0);
+  if(cfg.plinth) box(blockW-40,plinthH,D-60,M.inner,startX+blockW/2,-plinthH/2,-20);
+  box(blockW,T,D,M.body,startX+blockW/2,plinthH+bodyH-T/2,0);
+  box(blockW,T,D,M.body,startX+blockW/2,plinthH+T/2,0);
+  const innerH=bodyH-2*T, basketH=cfg.basket?cfg.basketH:0;
+  let cursor=startX; box(T,bodyH,D,M.body,startX+T/2,plinthH+bodyH/2,0);
+  for(let s=0;s<sections.length;s++){
+    const sec=sections[s], cx=cursor+sec.w/2, usableW=sec.w-T, isAC=sec.type==='acbay';
+    if(sec.w<40){cursor+=sec.w;box(T,bodyH,D,M.body,cursor+(s===sections.length-1?-T/2:0),plinthH+bodyH/2,0);continue;}
+    if(cfg.back && (sec.type==='pillows'||sec.type==='universal'||(sec.type==='duvet'&&sec.topShelf)))
+      box(usableW,innerH,4,M.back,cx,plinthH+bodyH/2,-D/2+4);
+    if(isAC){
+      const nicheTop=plinthH+T+cfg.acH;
+      box(usableW,cfg.acH,4,M.back,cx,plinthH+T+cfg.acH/2,-D/2+4);
+      const shelfN=Math.max(1,Math.round(cfg.acH/Math.max(300,basketH||340))), rs=cfg.acH/shelfN;
+      for(let lvl=0;lvl<shelfN;lvl++){const floor=plinthH+T+rs*lvl;if(lvl>0)box(usableW,T,D-20,M.shelf,cx,floor,-10);const nb=usableW>700?2:1,bw=usableW/nb-12,bh=Math.min(rs-30,(basketH||340)-24);for(let b=0;b<nb;b++){const bx=cx-usableW/2+bw/2+8+b*(usableW/nb);box(bw,bh,D-80,M.basket,bx,floor+T/2+bh/2+6,-18);}}
+      box(usableW,T,D-20,M.shelf,cx,nicheTop,-10);
+      box(usableW-40,150,180,M.ac,cx,nicheTop+(plinthH+bodyH-T-nicheTop)/2+20,-D/2+120,false);
+      cursor+=sec.w; box(T,bodyH,D,M.body,cursor+(s===sections.length-1?-T/2:0),plinthH+bodyH/2,0); continue;
+    }
+    let zB=plinthH+T;
+    if(cfg.basket){const nb=usableW>700?2:1,bw=usableW/nb-12;for(let b=0;b<nb;b++){const bx=cx-usableW/2+bw/2+8+b*(usableW/nb);box(bw,basketH-24,D-80,M.basket,bx,plinthH+T+(basketH-24)/2+8,-18);}box(usableW,T,D-20,M.shelf,cx,plinthH+T+basketH,-10);zB=plinthH+T+basketH;}
+    const zT=plinthH+bodyH-T;
+    drawSection(sec,cx,usableW,zB,zT,D);
+    cursor+=sec.w; box(T,bodyH,D,M.body,cursor+(s===sections.length-1?-T/2:0),plinthH+bodyH/2,0);
+  }
+}
+function build(){
+  applyAuto();
+  scene.remove(group);group.traverse(o=>{if(o.geometry)o.geometry.dispose();});
+  group=new THREE.Group();scene.add(group);
+  const wL=cfg.left.reduce((a,s)=>a+s.w,0), wR=cfg.right.reduce((a,s)=>a+s.w,0);
+  const total=wL+cfg.col+wR, ox=-total/2;
+  buildBlock(cfg.left,ox);
+  box(cfg.col,cfg.H,90,M.col,ox+wL+cfg.col/2,cfg.H/2,-cfg.D/2-45);
+  buildBlock(cfg.right,ox+wL+cfg.col);
+  group.position.y=-cfg.H/2; frameCamera(); if(view2d)draw2D();
+}
+
+// ===== camera =====
+let camAngle=0.5,camPitch=0.16,camDist=0;
+function worldW(){return cfg.left.reduce((a,s)=>a+s.w,0)+cfg.col+cfg.right.reduce((a,s)=>a+s.w,0);}
+function frameCamera(){const r=Math.max(worldW(),cfg.H);camDist=camDist||r*1.0;updateCam();}
+function updateCam(){const r=Math.max(worldW(),cfg.H);const d=Math.max(camDist,r*0.4);camera.position.set(Math.sin(camAngle)*Math.cos(camPitch)*d,Math.sin(camPitch)*d,Math.cos(camAngle)*Math.cos(camPitch)*d);camera.lookAt(0,0,0);}
+let drag=false,px=0,py=0;
+canvas.addEventListener('pointerdown',e=>{drag=true;px=e.clientX;py=e.clientY});
+window.addEventListener('pointerup',()=>drag=false);
+window.addEventListener('pointermove',e=>{if(!drag)return;camAngle-=(e.clientX-px)*0.008;camPitch+=(e.clientY-py)*0.006;camPitch=Math.max(-0.1,Math.min(1.2,camPitch));px=e.clientX;py=e.clientY;updateCam();});
+canvas.addEventListener('wheel',e=>{e.preventDefault();camDist*=(1+Math.sign(e.deltaY)*0.08);const r=worldW();camDist=Math.max(r*0.4,Math.min(r*2,camDist));updateCam();},{passive:false});
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}}
+function loop(){resize();if(!view2d)renderer.render(scene,camera);requestAnimationFrame(loop);}
+loop();
+
+// ===== 2D =====
+const c2=document.getElementById('scene2d');
+function draw2D(){
+  applyAuto();
+  const dpr=Math.min(window.devicePixelRatio,2),cw=c2.clientWidth,chh=c2.clientHeight;
+  c2.width=cw*dpr;c2.height=chh*dpr;
+  const g=c2.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,cw,chh);g.fillStyle='#15110d';g.fillRect(0,0,cw,chh);
+  const wL=cfg.left.reduce((a,s)=>a+s.w,0),wR=cfg.right.reduce((a,s)=>a+s.w,0),worldWmm=wL+cfg.col+wR;
+  const mL=58,mR=26,mT=30,mB=58,scale=Math.min((cw-mL-mR)/worldWmm,(chh-mT-mB)/cfg.H);
+  const x0=mL,y0=chh-mB,X=mm=>x0+mm*scale,Y=mm=>y0-mm*scale;
+  const plinthH=cfg.plinth?80:0,basketH=cfg.basket?cfg.basketH:0,T=cfg.T;
+  function dimH(xa,xb,y,txt){g.strokeStyle='#a89b88';g.lineWidth=1;g.beginPath();g.moveTo(xa,y-4);g.lineTo(xa,y+4);g.moveTo(xb,y-4);g.lineTo(xb,y+4);g.moveTo(xa,y);g.lineTo(xb,y);g.stroke();g.fillStyle='#c9a063';g.font='10px Helvetica,Arial';g.textAlign='center';g.fillText(txt,(xa+xb)/2,y+14);}
+  function block(sections,startMM){
+    let cur=startMM;
+    sections.forEach((sec)=>{
+      if(sec.w<10){return;}
+      const meta=TYPE[sec.type];
+      g.fillStyle=meta.col2+'33';g.strokeStyle=meta.col2;g.lineWidth=1.4;
+      g.fillRect(X(cur),Y(cfg.H),sec.w*scale,cfg.H*scale);g.strokeRect(X(cur),Y(cfg.H),sec.w*scale,cfg.H*scale);
+      g.strokeStyle='rgba(168,155,136,.3)';g.lineWidth=1;g.beginPath();g.moveTo(X(cur),Y(plinthH));g.lineTo(X(cur+sec.w),Y(plinthH));g.stroke();
+      const zT=cfg.H-T;
+      if(sec.type==='acbay'){
+        const shelfN=Math.max(1,Math.round(cfg.acH/Math.max(300,basketH||340))),rs=cfg.acH/shelfN;
+        g.strokeStyle='rgba(216,184,126,.5)';for(let l=0;l<=shelfN;l++){g.beginPath();g.moveTo(X(cur),Y(plinthH+T+rs*l));g.lineTo(X(cur+sec.w),Y(plinthH+T+rs*l));g.stroke();}
+        g.fillStyle='rgba(122,99,70,.5)';for(let l=0;l<shelfN;l++){const fy=plinthH+T+rs*l;g.fillRect(X(cur+sec.w*0.12),Y(fy+rs*0.8),sec.w*0.76*scale,rs*0.6*scale);}
+        g.strokeStyle='#bfcad3';g.setLineDash([5,4]);g.strokeRect(X(cur+sec.w*0.1),Y(cfg.H-T-40),sec.w*0.8*scale,150*scale);g.setLineDash([]);
+        g.fillStyle='#bfcad3';g.font='9px Helvetica,Arial';g.textAlign='center';g.fillText('кондиционер',X(cur+sec.w/2),Y(cfg.H-T-95));
+      } else {
+        if(cfg.basket){g.strokeStyle='rgba(168,155,136,.3)';g.beginPath();g.moveTo(X(cur),Y(plinthH+T+basketH));g.lineTo(X(cur+sec.w),Y(plinthH+T+basketH));g.stroke();}
+        const zB=plinthH+T+basketH;
+        if(sec.type==='pillows'){const tiers=pillowTiers(zB,zT,secDist(sec)),rs=(zT-zB)/tiers;g.strokeStyle='rgba(216,184,126,.5)';for(let k=1;k<tiers;k++){g.beginPath();g.moveTo(X(cur),Y(zB+rs*k));g.lineTo(X(cur+sec.w),Y(zB+rs*k));g.stroke();}}
+        if(sec.type==='universal'){const sh=Math.max(1,Math.round((zT-zB)/secDist(sec)));g.strokeStyle='rgba(194,168,120,.5)';for(let k=1;k<sh;k++){g.beginPath();g.moveTo(X(cur),Y(zB+(zT-zB)/sh*k));g.lineTo(X(cur+sec.w),Y(zB+(zT-zB)/sh*k));g.stroke();}}
+        if(sec.type==='duvet'){const z=duvetZone(sec,zB,zT);if(sec.topShelf){g.strokeStyle='rgba(216,184,126,.7)';g.beginPath();g.moveTo(X(cur),Y(z.railTop+40));g.lineTo(X(cur+sec.w),Y(z.railTop+40));g.stroke();}g.strokeStyle='#9aa3ad';g.lineWidth=2;z.ys.forEach(ry=>{g.beginPath();g.moveTo(X(cur+10),Y(ry));g.lineTo(X(cur+sec.w-10),Y(ry));g.stroke();});}
+        if(sec.type==='robes'||sec.type==='towels'){g.strokeStyle='#9aa3ad';g.lineWidth=2;g.beginPath();g.moveTo(X(cur+10),Y(zT-TOP_GAP));g.lineTo(X(cur+sec.w-10),Y(zT-TOP_GAP));g.stroke();}
+      }
+      const zB2=plinthH+T+(sec.type==='acbay'?0:basketH);
+      const capTxt=capLine(sec,sectionCapacity(sec,zB2,zT),true);
+      g.save();g.fillStyle=meta.col2;g.font='600 11px Helvetica,Arial';g.textAlign='center';
+      const lx=X(cur+sec.w/2),ly=Y(cfg.H)-(cfg.H*scale)*0.05;
+      if(sec.w*scale>56){g.fillText(meta.name,lx,ly);g.font='8.5px Helvetica,Arial';g.fillStyle='#c9a063';if(capTxt)g.fillText(capTxt,lx,ly+12);}
+      else{g.translate(lx,Y(cfg.H/2));g.rotate(-Math.PI/2);g.fillText(meta.name,0,0);}
+      g.restore();
+      dimH(X(cur),X(cur+sec.w),y0+15,(sec.w/10).toFixed(0));
+      cur+=sec.w;
+    });
+  }
+  block(cfg.left,0);
+  g.fillStyle='rgba(69,60,52,.6)';g.strokeStyle='#6b5c4e';g.fillRect(X(wL),Y(cfg.H),cfg.col*scale,cfg.H*scale);g.strokeRect(X(wL),Y(cfg.H),cfg.col*scale,cfg.H*scale);
+  g.save();g.fillStyle='#a89b88';g.font='9px Helvetica,Arial';g.textAlign='center';g.translate(X(wL+cfg.col/2),Y(cfg.H/2));g.rotate(-Math.PI/2);g.fillText('колонна',0,0);g.restore();
+  dimH(X(wL),X(wL+cfg.col),y0+15,(cfg.col/10).toFixed(0));
+  block(cfg.right,wL+cfg.col);
+  dimH(X(0),X(worldWmm),y0+38,'Σ '+(worldWmm/10).toFixed(0)+' см');
+  g.strokeStyle='#a89b88';g.lineWidth=1;const hx=mL-14;g.beginPath();g.moveTo(hx-4,Y(0));g.lineTo(hx+4,Y(0));g.moveTo(hx-4,Y(cfg.H));g.lineTo(hx+4,Y(cfg.H));g.moveTo(hx,Y(0));g.lineTo(hx,Y(cfg.H));g.stroke();
+  g.save();g.fillStyle='#c9a063';g.font='10px Helvetica,Arial';g.textAlign='center';g.translate(hx-12,Y(cfg.H/2));g.rotate(-Math.PI/2);g.fillText((cfg.H/10).toFixed(0)+' см',0,0);g.restore();
+  g.fillStyle='#a89b88';g.font='10px Helvetica,Arial';g.textAlign='left';g.fillText('глубина '+(cfg.D/10).toFixed(0)+' · цоколь '+(plinthH/10).toFixed(0)+' см · перекладины от верха '+(TOP_GAP/10).toFixed(0)+' см',mL,mT-12);
+}
+
+// ===== capacity text =====
+function capLine(sec,cap,short){
+  const p=[];
+  if(sec.type==='pillows') p.push(cap.pillows+(short?' под.':' подушек (стопками)'));
+  if(sec.type==='duvet'){
+    const d=[];if(cap.duv15>0)d.push(cap.duv15+(short?' п/т':' полуторных'));if(cap.duv20>0)d.push(cap.duv20+(short?' д/с':' двуспальных'));
+    let t=d.join(short?' / ':' или ');
+    if(cap.visible)t+=(short?` · ~${cap.visible.v15}см`:` · видно ~${cap.visible.v15} см`);
+    if(sec.topShelf&&cap.pillows)t+=(short?` +полка`:` + полка подушек сверху`);
+    p.push(t);
+  }
+  if(sec.type==='robes'){let t=cap.robes+(short?' хал.':' халатов');if(cap.slippers)t+=(short?` · ${cap.slippers} тап.`:` + ${cap.slipShelves} полки тапочек (${cap.slippers} пар)`);p.push(t);}
+  if(sec.type==='towels') p.push(cap.towels+(short?' пол.':' полотенец'));
+  if(sec.type==='universal') p.push(short?'полотенца+пух':'полотенца стопками + колбы с пухом');
+  if(sec.type==='acbay'){const sh=Math.max(1,Math.round(cfg.acH/Math.max(300,(cfg.basket?cfg.basketH:340))));p.push((short?sh+'×короба':sh+' яруса коробов'));}
+  return p.join(' · ');
+}
+
+// ===== UI =====
+const $=id=>document.getElementById(id);
+function renderSections(){
+  applyAuto();
+  ['left','right'].forEach(side=>{
+    const wrap=$(side==='left'?'secL':'secR');wrap.innerHTML='';
+    const plinthH=cfg.plinth?80:0,basketH=cfg.basket?cfg.basketH:0,zT=cfg.H-cfg.T;
+    cfg[side].forEach((sec,i)=>{
+      const meta=TYPE[sec.type];
+      const card=document.createElement('div');card.className='secCard';
+      const opts=Object.keys(TYPE).map(k=>`<option value="${k}" ${sec.type===k?'selected':''}>${TYPE[k].name}</option>`).join('');
+      let widthRow;
+      if(sec.type==='robes') widthRow=`<div class="auto">ширина по остатку: ${(sec.w/10).toFixed(0)} см</div>`;
+      else if(sec.type==='acbay') widthRow=`<div class="auto">ширина ниши: ${(cfg.acW/10).toFixed(0)} см (раздел 5)</div>`;
+      else widthRow=`<div class="wpills">${meta.widths.map(w=>`<button data-side="${side}" data-i="${i}" data-w="${w}" class="${sec.w===w?'on':''}">${w}</button>`).join('')}</div>`;
+      let sub='';
+      if(sec.type==='pillows'||sec.type==='universal'){
+        sub=`<div class="subctl"><span>Расст. между полками:</span><div class="mini">${meta.dist.map(d=>`<button data-side="${side}" data-i="${i}" data-dist="${d}" class="${secDist(sec)===d?'on':''}">${(d/10).toFixed(0)}</button>`).join('')}</div></div>`;
+      } else if(sec.type==='duvet'){
+        sub=`<div class="subctl"><span>Балок:</span><div class="mini">${[1,2,3].map(rn=>`<button data-side="${side}" data-i="${i}" data-rails="${rn}" class="${secRails(sec)===rn?'on':''}">${rn}</button>`).join('')}</div><label class="tg"><span style="margin-left:4px">полка сверху</span><span class="sw" style="width:34px;height:19px"><input type="checkbox" ${sec.topShelf?'checked':''} data-side="${side}" data-i="${i}" class="tsTog"><span class="slot"></span></span></label></div>`;
+      }
+      const zB=plinthH+cfg.T+(sec.type==='acbay'?0:basketH);
+      const cap=sectionCapacity(sec,zB,zT);
+      const capTxt=capLine(sec,cap,false);
+      const warn=cap.wide?`<div class="warn">⚠ полка шире 90 см — нужна толщина 22–25 мм или опора (удорожание). Лучше две секции по 90.</div>`:'';
+      card.innerHTML=`<div class="top"><span class="n">${i+1}</span><select data-side="${side}" data-i="${i}" class="typeSel">${opts}</select><button class="del" data-side="${side}" data-i="${i}">✕</button></div>${widthRow}${sub}${capTxt?`<div class="cap">≈ ${capTxt}</div>`:''}${warn}`;
+      wrap.appendChild(card);
+    });
+    wrap.querySelectorAll('.typeSel').forEach(sel=>sel.addEventListener('change',()=>{const s=cfg[sel.dataset.side][+sel.dataset.i];s.type=sel.value;const M=TYPE[s.type];if(M.widths.length&&!M.widths.includes(s.w))s.w=M.widths[0];if(s.type==='duvet')s.rails=s.rails||2;if((s.type==='pillows'||s.type==='universal'))s.dist=s.dist||(s.type==='universal'?460:540);build();renderSections();updateAll();}));
+    wrap.querySelectorAll('.wpills button').forEach(b=>b.addEventListener('click',()=>{cfg[b.dataset.side][+b.dataset.i].w=+b.dataset.w;build();renderSections();updateAll();}));
+    wrap.querySelectorAll('.mini button[data-dist]').forEach(b=>b.addEventListener('click',()=>{cfg[b.dataset.side][+b.dataset.i].dist=+b.dataset.dist;build();renderSections();updateAll();}));
+    wrap.querySelectorAll('.mini button[data-rails]').forEach(b=>b.addEventListener('click',()=>{cfg[b.dataset.side][+b.dataset.i].rails=+b.dataset.rails;build();renderSections();updateAll();}));
+    wrap.querySelectorAll('.tsTog').forEach(t=>t.addEventListener('change',()=>{cfg[t.dataset.side][+t.dataset.i].topShelf=t.checked;build();renderSections();updateAll();}));
+    wrap.querySelectorAll('.del').forEach(b=>b.addEventListener('click',()=>{if(cfg[b.dataset.side].length>1){cfg[b.dataset.side].splice(+b.dataset.i,1);build();renderSections();updateAll();}}));
+  });
+}
+$('addL').addEventListener('click',()=>{cfg.left.push({w:900,type:'pillows',dist:540});build();renderSections();updateAll();});
+$('addR').addEventListener('click',()=>{cfg.right.push({w:900,type:'pillows',dist:540});build();renderSections();updateAll();});
+function bind(id,key,label,after){const el=$(id),out=$('v'+label);el.addEventListener('input',()=>{cfg[key]=parseInt(el.value);if(out)out.textContent=el.value;if(after)after();build();renderSections();updateAll();});}
+bind('AcW','acW','AcW');
+bind('AcH','acH','AcH');
+bind('T','T','T');
+$('boxSize').addEventListener('change',e=>{cfg.basketH=parseInt(e.target.value);build();renderSections();updateAll();});
+$('basket').addEventListener('change',e=>{cfg.basket=e.target.checked;build();renderSections();updateAll();});
+$('frontbar').addEventListener('change',e=>{cfg.frontbar=e.target.checked;build();});
+$('led').addEventListener('change',e=>{cfg.led=e.target.checked;build();});
+$('back').addEventListener('change',e=>{cfg.back=e.target.checked;build();});
+$('plinth').addEventListener('change',e=>{cfg.plinth=e.target.checked;build();updateAll();});
+$('v3d').addEventListener('click',()=>{view2d=false;$('v3d').classList.add('on');$('v2d').classList.remove('on');canvas.style.display='block';c2.style.display='none';$('hint').textContent='Тяните — повернуть · колесо — зум';});
+$('v2d').addEventListener('click',()=>{view2d=true;$('v2d').classList.add('on');$('v3d').classList.remove('on');canvas.style.display='none';c2.style.display='block';$('hint').textContent='Вид спереди · размеры в см';draw2D();});
+$('reset').addEventListener('click',()=>{
+  cfg=JSON.parse(JSON.stringify(STANDARD));
+  $('AcW').value=cfg.acW;$('vAcW').textContent=cfg.acW;$('AcH').value=cfg.acH;$('vAcH').textContent=cfg.acH;
+  $('T').value=cfg.T;$('vT').textContent=cfg.T;$('boxSize').value=cfg.basketH;
+  $('basket').checked=cfg.basket;$('frontbar').checked=cfg.frontbar;$('led').checked=cfg.led;$('back').checked=cfg.back;$('plinth').checked=cfg.plinth;
+  build();renderSections();updateAll();
+});
+
+function fitClass(sum,span){return sum<=span+1?'ok':'over';}
+function updateAll(){
+  applyAuto();
+  const wL=cfg.left.reduce((a,s)=>a+s.w,0),wR=cfg.right.reduce((a,s)=>a+s.w,0);
+  $('fixedDims').innerHTML=
+    `<div class="row"><span>Левый прогон</span><b>${(cfg.leftSpan/10).toFixed(0)} см</b></div>`+
+    `<div class="row"><span>Колонна</span><b>${(cfg.col/10).toFixed(0)} см</b></div>`+
+    `<div class="row"><span>Правый прогон</span><b>${(cfg.rightSpan/10).toFixed(0)} см</b></div>`+
+    `<div class="row"><span>Высота</span><b>${(cfg.H/10).toFixed(0)} см</b></div>`+
+    `<div class="row"><span>Глубина</span><b>${(cfg.D/10).toFixed(0)} см</b></div>`+
+    `<span class="lock">🔒 зафиксировано — коллеги не меняют</span>`;
+  const acSec=cfg.right.find(s=>s.type==='acbay')||cfg.left.find(s=>s.type==='acbay');
+  $('acState').innerHTML= acSec
+    ? `Выбрано: ширина <b style="color:var(--wood-soft)">${(cfg.acW/10).toFixed(0)} см</b> × высота ниши <b style="color:var(--wood-soft)">${(cfg.acH/10).toFixed(0)} см</b>. Над нишей — кондиционер, внутри — полки с коробами.`
+    : `Секции «Ниша (кондиц.)» нет — добавь её типом в правый блок (крайней справа).`;
+  // robes remainder shown in fit
+  const robeW_L=cfg.left.filter(s=>s.type==='robes').reduce((a,s)=>a+s.w,0);
+  const robeW_R=cfg.right.filter(s=>s.type==='robes').reduce((a,s)=>a+s.w,0);
+  const negL=cfg.left.some(s=>s.type==='robes'&&s.w<200), negR=cfg.right.some(s=>s.type==='robes'&&s.w<200);
+  $('fitL').className='fit '+(wL>cfg.leftSpan+1||negL?'over':'ok');
+  $('fitL').textContent=`Σ ${(wL/10).toFixed(0)} / ${(cfg.leftSpan/10).toFixed(0)} см${robeW_L?` · халаты ${(robeW_L/10).toFixed(0)}`:''} ${wL<=cfg.leftSpan+1&&!negL?'✓':'⚠ мало места'}`;
+  $('fitR').className='fit '+(wR>cfg.rightSpan+1||negR?'over':'ok');
+  $('fitR').textContent=`Σ ${(wR/10).toFixed(0)} / ${(cfg.rightSpan/10).toFixed(0)} см${robeW_R?` · халаты ${(robeW_R/10).toFixed(0)}`:''} ${wR<=cfg.rightSpan+1&&!negR?'✓':'⚠ мало места'}`;
+  const total=wL+cfg.col+wR;
+  $('readout').innerHTML=`<span class="big">стена <b>${(total/1000).toFixed(2)}</b> м · H <b>${cfg.H}</b> · гл <b>${cfg.D}</b></span><br>левый ${(wL/1000).toFixed(2)} · колонна ${(cfg.col/1000).toFixed(2)} · правый ${(wR/1000).toFixed(2)} м`;
+  const plinthH=cfg.plinth?80:0,basketH=cfg.basket?cfg.basketH:0,zT=cfg.H-cfg.T;
+  const tot={pillows:0,duv15:0,duv20:0,robes:0,towels:0,boxes:0,slippers:0};
+  [...cfg.left,...cfg.right].forEach(s=>{const zB=plinthH+cfg.T+(s.type==='acbay'?0:basketH);const c=sectionCapacity(s,zB,zT);tot.pillows+=c.pillows;tot.duv15+=c.duv15;tot.duv20+=c.duv20;tot.robes+=c.robes;tot.towels+=c.towels;tot.boxes+=c.boxes;tot.slippers+=c.slippers;});
+  $('counter').innerHTML=
+    `<span class="ttl">Влезает всего</span>`+
+    `<div class="chip"><i style="background:#d8b87e"></i><span class="num">${tot.pillows}</span><span class="lbl">подушек</span></div>`+
+    `<div class="chip"><i style="background:#8fa9bc"></i><span class="num">${tot.duv15}</span><span class="lbl">одеял п/т <span style="opacity:.6">/ ${tot.duv20} д/с</span></span></div>`+
+    `<div class="chip"><i style="background:#9aa3ad"></i><span class="num">${tot.robes}</span><span class="lbl">халатов</span></div>`+
+    `<div class="chip"><i style="background:#e6d8c4"></i><span class="num">${tot.slippers}</span><span class="lbl">пар тапочек</span></div>`+
+    `<div class="chip"><i style="background:#86b0a8"></i><span class="num">${tot.towels}</span><span class="lbl">полотенец</span></div>`;
+  const all=[...cfg.left,...cfg.right],cnt=ty=>all.filter(s=>s.type===ty).length;
+  $('summary').innerHTML=
+    `<div class="row"><span>Секций всего</span><b>${all.length}</b></div>`+
+    `<div class="row"><span>Подушки</span><b>${cnt('pillows')}</b></div>`+
+    `<div class="row"><span>Одеяла</span><b>${cnt('duvet')}</b></div>`+
+    `<div class="row"><span>Халаты</span><b>${cnt('robes')}</b></div>`+
+    `<div class="row"><span>Полотенца</span><b>${cnt('towels')}</b></div>`+
+    `<div class="row"><span>Универсал</span><b>${cnt('universal')}</b></div>`+
+    `<div class="row"><span>Ниша кондиц.</span><b>${cnt('acbay')}</b></div>`;
+}
+renderSections();build();updateAll();
+</script>
+</body>
+</html>
